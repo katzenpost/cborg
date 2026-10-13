@@ -10,7 +10,9 @@ BIN   := .lake/build/bin
 # Test executables, as declared in lakefile.toml. Lake names each binary after
 # its module with the dots turned into dashes.
 TESTS := \
-	Cborg.Tests.Reference
+	Cborg.Tests.Reference \
+	Cborg.Tests.Encoding \
+	Cborg.Tests.Properties
 
 .PHONY: all build test clean
 

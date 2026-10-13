@@ -45,6 +45,12 @@ def unhex (s : String) : ByteArray := Id.run do
 instance : BEq ByteArray := ⟨fun a b => a.data == b.data⟩
 instance : ToString ByteArray := ⟨hex⟩
 
+instance {ε α : Type} [BEq ε] [BEq α] : BEq (Except ε α) where
+  beq
+    | .ok a, .ok b => a == b
+    | .error a, .error b => a == b
+    | _, _ => false
+
 /-- Decode exactly one value, failing on trailing bytes. -/
 def decodeAll {α : Type} (d : Decoder α) (bs : ByteArray) : Except String α :=
   match deserialiseFromBytes d bs with
