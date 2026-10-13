@@ -1,0 +1,6 @@
+/.lake
+/bench/.lake
+
+# Emacs lock files / autosaves
+.#*
+\#*\#

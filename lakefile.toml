@@ -1,0 +1,14 @@
+name = "cborg"
+defaultTargets = ["Cborg"]
+
+[leanOptions]
+pp.unicode.fun = true
+autoImplicit = false
+relaxedAutoImplicit = false
+
+[[lean_lib]]
+name = "Cborg"
+
+[[lean_exe]]
+name = "Cborg.Tests.Reference"
+root = "Cborg.Tests.Reference"

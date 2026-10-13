@@ -1,0 +1,19 @@
+name: Lean Action CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: leanprover/lean-action@v1
+      - name: Run tests
+        env:
+          # panics in compiled Lean print a message but exit 0 unless this is set
+          LEAN_ABORT_ON_PANIC: "1"
+        run: make test
