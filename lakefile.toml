@@ -20,3 +20,7 @@ root = "Cborg.Tests.Encoding"
 [[lean_exe]]
 name = "Cborg.Tests.Properties"
 root = "Cborg.Tests.Properties"
+
+[[lean_exe]]
+name = "Cborg.Tests.ThinClient"
+root = "Cborg.Tests.ThinClient"

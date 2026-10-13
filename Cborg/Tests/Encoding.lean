@@ -174,6 +174,22 @@ def flatTermRegress : TestM Unit := do
   check "invalid flat term: stray break" (!validFlatTerm (toFlatTerm encodeBreak))
   check "invalid flat term: trailing" (!validFlatTerm (toFlatTerm (encodeWord 1 ++ encodeWord 2)))
 
+/-- As in Haskell, entries of an indefinite-length map sit one level deeper than a definite map's. -/
+def pretty : TestM Unit := do
+  let e := encodeListLen 2 ++ encodeBool true ++ encodeMapLenIndef ++ encodeString "a"
+    ++ encodeFloat16 1.5 ++ encodeBreak
+  checkEq "pretty" (String.intercalate "\n" ["",
+    "82  # list(2)",
+    "   f5  # bool(true)",
+    "   bf  # map(*)",
+    "          # key",
+    "         61 61  # text(\"a\")",
+    "          # value",
+    "         f9 3e 00  # float16(1.5)",
+    "   ff  # break"]) (Pretty.prettyHexEnc e)
+  let long := Pretty.prettyHexEnc (encodeBytes (ByteArray.mk (Array.replicate 20 0)))
+  checkEq "pretty wraps at 16 bytes" 2 (long.splitOn "\n" |>.length |> (· - 1))
+
 def main : IO UInt32 :=
   runSuite "Encoding" do
     headers
@@ -182,6 +198,7 @@ def main : IO UInt32 :=
     issue160
     issue162
     flatTermRegress
+    pretty
 
 end Cborg.Tests.Encoding
 
