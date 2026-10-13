@@ -528,20 +528,72 @@ instance {α : Type} : Inhabited (IDecode α) := ⟨.Fail .empty 0 default⟩
 namespace Read
 
 /--
+How many bytes from `pos` the token there needs, judged from what is
+available: its header, plus the body of a definite-length string or bignum.
+-/
+def tokenNeed (bs : ByteArray) (pos : Nat) : Nat :=
+  if pos ≥ bs.size then 1 else
+  let ib := bs[pos]!
+  let ai := ib &&& 31
+  let hs := if ai < 24 then 1 else if ai == 24 then 2 else if ai == 25 then 3
+    else if ai == 26 then 5 else if ai == 27 then 9 else 1
+  if ib == 0xc2 || ib == 0xc3 then 1 + tokenNeed bs (pos + 1)
+  else if (ib >>> 5 == 2 || ib >>> 5 == 3) && ai < 28 then
+    match header bs pos (fun _ => true) with
+    | .ok len sz => sz + len.toNat
+    | _ => hs
+  else hs
+termination_by bs.size - pos
+decreasing_by
+  all_goals simp_wf
+  all_goals omega
+
+def concatChunks (buf : ByteArray) (pos : Nat) (chunks : Array ByteArray) (total : Nat) : ByteArray :=
+  chunks.foldl (· ++ ·) ((ByteArray.emptyWithCapacity (buf.size - pos + total)).append
+    (buf.extract pos buf.size))
+
+/-- The input has ended: a decoder that asks for more has run out. -/
+def atEnd {α : Type} : IDecode α → IDecode α
+  | .Partial k => k none
+  | r => r
+
+mutual
+
+/--
 Resume over `buf`, whose first byte is at absolute offset `base`. On running
 short, keep only the bytes from the earliest of `pos` and any open byte span,
-then wait for the next chunk.
+then wait for enough chunks to complete the stalled token.
 -/
 partial def resume {α : Type} (buf : ByteArray) (base : Nat) (marks : List Nat) (pos : Nat)
     (da : DecodeAction α) : IDecode α :=
   match step buf base marks pos da with
   | .done pos a => .Done (buf.extract pos buf.size) (base + pos) a
   | .fail pos msg => .Fail (buf.extract pos buf.size) (base + pos) ⟨base + pos, msg⟩
-  | .needMore pos marks da => .Partial fun
-    | none => .Fail (buf.extract pos buf.size) (base + pos) ⟨base + pos, "end of input"⟩
+  | .needMore pos marks da =>
+    let keep := marks.foldl (fun m o => min m (o - base)) pos
+    waitFor buf base marks keep (pos - keep) da (tokenNeed buf pos) #[] 0
+
+/--
+Collect chunks until the buffer from `keep` holds `need` bytes past `pos`, then
+join them once. Copying the buffer on every chunk instead would make decoding a
+long string arrive in many chunks quadratic.
+-/
+partial def waitFor {α : Type} (buf : ByteArray) (base : Nat) (marks : List Nat) (keep pos : Nat)
+    (da : DecodeAction α) (need : Nat) (chunks : Array ByteArray) (total : Nat) : IDecode α :=
+  .Partial fun
+    | none =>
+      if chunks.isEmpty then
+        .Fail (buf.extract (keep + pos) buf.size) (base + keep + pos) ⟨base + keep + pos, "end of input"⟩
+      else
+        atEnd (resume (concatChunks buf keep chunks total) (base + keep) marks pos da)
     | some chunk =>
-      let keep := marks.foldl (fun m o => min m (o - base)) pos
-      resume (buf.extract keep buf.size ++ chunk) (base + keep) marks (pos - keep) da
+      let chunks := chunks.push chunk
+      let total := total + chunk.size
+      if buf.size - keep - pos + total ≥ need then
+        resume (concatChunks buf keep chunks total) (base + keep) marks pos da
+      else waitFor buf base marks keep pos da need chunks total
+
+end
 
 end Read
 
@@ -551,7 +603,7 @@ def deserialiseIncremental {α : Type} (d : Decoder α) : IDecode α :=
   | .Done a => .Done .empty 0 a
   | .Fail msg => .Fail .empty 0 ⟨0, msg⟩
   | da => .Partial fun
-    | none => Read.resume .empty 0 [] 0 da
+    | none => Read.atEnd (Read.resume .empty 0 [] 0 da)
     | some chunk => Read.resume chunk 0 [] 0 da
 
 end Cborg

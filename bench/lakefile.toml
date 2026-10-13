@@ -1,0 +1,19 @@
+name = "cborgBench"
+defaultTargets = ["cborg-bench"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+
+[[require]]
+name = "cborg"
+path = ".."
+
+[[require]]
+name = "LeanBench"
+git = "https://github.com/alok/LeanBench"
+rev = "main"
+
+[[lean_exe]]
+name = "cborg-bench"
+root = "Bench"

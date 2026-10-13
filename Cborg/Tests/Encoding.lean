@@ -174,6 +174,17 @@ def flatTermRegress : TestM Unit := do
   check "invalid flat term: stray break" (!validFlatTerm (toFlatTerm encodeBreak))
   check "invalid flat term: trailing" (!validFlatTerm (toFlatTerm (encodeWord 1 ++ encodeWord 2)))
 
+/-- `decodeTerm` refuses nesting deep enough to exhaust the stack. -/
+def nesting : TestM Unit := do
+  let nested (n : Nat) : String := String.join (List.replicate n "81") ++ "00"
+  check "nesting at the limit" (decodeAll decodeTerm (unhex (nested maxTermDepth))).toBool
+  failsWith "nesting past the limit" decodeTerm (nested (maxTermDepth + 1)) maxTermDepth
+    "maximum nesting depth exceeded"
+  failsWith "nested tags past the limit" (decodeTermMaxDepth 2) "c1c1c100" 2
+    "maximum nesting depth exceeded"
+  failsWith "10 million nested arrays" decodeTerm (nested 10000000) maxTermDepth
+    "maximum nesting depth exceeded"
+
 /-- As in Haskell, entries of an indefinite-length map sit one level deeper than a definite map's. -/
 def pretty : TestM Unit := do
   let e := encodeListLen 2 ++ encodeBool true ++ encodeMapLenIndef ++ encodeString "a"
@@ -198,6 +209,7 @@ def main : IO UInt32 :=
     issue160
     issue162
     flatTermRegress
+    nesting
     pretty
 
 end Cborg.Tests.Encoding

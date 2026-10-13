@@ -93,9 +93,13 @@ private def maxInt : UInt64 := 0x7fffffffffffffff
 
 mutual
 
-/-- `decodeTerm` as a function, since `partial` needs one to recurse through. -/
-partial def decodeTermU (_ : Unit) : Decoder Term := do
+/-- A term nested at most `d` containers or tags deep. -/
+partial def decodeTermMaxDepth (d : Nat) : Decoder Term := do
   let tkty ← peekTokenType
+  let nested := tkty matches .TypeListLen | .TypeListLen64 | .TypeListLenIndef | .TypeMapLen
+    | .TypeMapLen64 | .TypeMapLenIndef | .TypeTag | .TypeTag64
+  if nested && d == 0 then Decoder.fail "maximum nesting depth exceeded" else
+  let d := d - 1
   match tkty with
   | .TypeUInt | .TypeUInt64 =>
     let w ← decodeWord
@@ -113,15 +117,15 @@ partial def decodeTermU (_ : Unit) : Decoder Term := do
   | .TypeStringIndef => do decodeStringIndef; decodeStringIndefLen #[]
   | .TypeListLen | .TypeListLen64 => do
     let n ← decodeListLen
-    decodeListN n (Array.mkEmpty (min n 1024))
-  | .TypeListLenIndef => do decodeListLenIndef; decodeListIndefLen #[]
+    decodeListN d n (Array.mkEmpty (min n 1024))
+  | .TypeListLenIndef => do decodeListLenIndef; decodeListIndefLen d #[]
   | .TypeMapLen | .TypeMapLen64 => do
     let n ← decodeMapLen
-    decodeMapN n (Array.mkEmpty (min n 1024))
-  | .TypeMapLenIndef => do decodeMapLenIndef; decodeMapIndefLen #[]
+    decodeMapN d n (Array.mkEmpty (min n 1024))
+  | .TypeMapLenIndef => do decodeMapLenIndef; decodeMapIndefLen d #[]
   | .TypeTag | .TypeTag64 => do
     let x ← decodeTag64
-    let y ← decodeTermU ()
+    let y ← decodeTermMaxDepth d
     pure (TTagged x y)
   | .TypeBool => TBool <$> decodeBool
   | .TypeNull => do decodeNull; pure TNull
@@ -137,32 +141,39 @@ partial def decodeStringIndefLen (acc : Array String) : Decoder Term := do
   if ← decodeBreakOr then pure (TStringI acc)
   else decodeStringIndefLen (acc.push (← decodeString))
 
-partial def decodeListN (n : Nat) (acc : Array Term) : Decoder Term :=
+partial def decodeListN (d : Nat) (n : Nat) (acc : Array Term) : Decoder Term :=
   match n with
   | 0 => pure (TList acc)
-  | n+1 => do decodeListN n (acc.push (← decodeTermU ()))
+  | n+1 => do decodeListN d n (acc.push (← decodeTermMaxDepth d))
 
-partial def decodeListIndefLen (acc : Array Term) : Decoder Term := do
+partial def decodeListIndefLen (d : Nat) (acc : Array Term) : Decoder Term := do
   if ← decodeBreakOr then pure (TListI acc)
-  else decodeListIndefLen (acc.push (← decodeTermU ()))
+  else decodeListIndefLen d (acc.push (← decodeTermMaxDepth d))
 
-partial def decodeMapN (n : Nat) (acc : Array (Term × Term)) : Decoder Term :=
+partial def decodeMapN (d : Nat) (n : Nat) (acc : Array (Term × Term)) : Decoder Term :=
   match n with
   | 0 => pure (TMap acc)
   | n+1 => do
-    let k ← decodeTermU ()
-    let v ← decodeTermU ()
-    decodeMapN n (acc.push (k, v))
+    let k ← decodeTermMaxDepth d
+    let v ← decodeTermMaxDepth d
+    decodeMapN d n (acc.push (k, v))
 
-partial def decodeMapIndefLen (acc : Array (Term × Term)) : Decoder Term := do
+partial def decodeMapIndefLen (d : Nat) (acc : Array (Term × Term)) : Decoder Term := do
   if ← decodeBreakOr then pure (TMapI acc)
   else
-    let k ← decodeTermU ()
-    let v ← decodeTermU ()
-    decodeMapIndefLen (acc.push (k, v))
+    let k ← decodeTermMaxDepth d
+    let v ← decodeTermMaxDepth d
+    decodeMapIndefLen d (acc.push (k, v))
 
 end
 
-def decodeTerm : Decoder Term := decodeTermU ()
+/--
+The deepest nesting `decodeTerm` accepts. Decoding recurses once per level, so
+without a bound a small input of nested arrays could exhaust the stack; Haskell
+avoids this only because GHC's stack grows on the heap.
+-/
+def maxTermDepth : Nat := 1000
+
+def decodeTerm : Decoder Term := decodeTermMaxDepth maxTermDepth
 
 end Cborg

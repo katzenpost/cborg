@@ -172,6 +172,14 @@ def truncatedFails : Gen (Option String) := do
   | .ok _ => return some s!"{t}: decoded from {cut} of {bs.size} bytes"
   | .error e => return if e.msg == "end of input" then none else some s!"{t}: {e}"
 
+def truncatedIncrementalFails : Gen (Option String) := do
+  let t ← term 3
+  let bs := toByteArray (encodeTerm t)
+  let cut ← nat 0 (bs.size - 1)
+  match incremental decodeTerm (← chunks (bs.extract 0 cut)) with
+  | .ok _ => return some s!"{t}: decoded from {cut} of {bs.size} bytes"
+  | .error e => return if e.endsWith "end of input" then none else some s!"{t}: {e}"
+
 /-- A header for major type `mt` with argument `w`, of a given total size (1, 2, 3, 5 or 9). -/
 def header (mt : UInt8) (w : UInt64) (sz : Nat) : ByteArray :=
   let ib := mt <<< 5
@@ -383,6 +391,7 @@ def main : IO UInt32 :=
     forAll "token stream from bytes" 1000 tokensMatchBytes
     forAll "term incremental" 3000 termIncremental
     forAll "truncated input" 1000 truncatedFails
+    forAll "truncated input, chunked" 1000 truncatedIncrementalFails
     canonicalTests
     boundaryTests
     utf8Tests

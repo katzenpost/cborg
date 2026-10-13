@@ -41,6 +41,18 @@ lengths are `Nat`. Haskell's separate 32-bit-platform constructors and its
 unpinned `ByteArray` variants are left out. `TBytesI` and `TStringI` keep their
 chunks where Haskell uses lazy strings.
 
+Where the port departs from Haskell, it is to fit Lean or to fail safely:
+
+- `decodeTerm` stops at 1000 levels of nesting (`decodeTermMaxDepth` takes any limit).
+  Decoding recurses once per level, and GHC's stack grows on the heap while Lean's
+  does not, so without a limit a few megabytes of nested arrays could crash the
+  process.
+- A decode failure reports the offset where the bad token starts. In one case
+  (cborg issue 162) Haskell reports the offset where that token ends.
+- `Option α` serialises `none` as `null`, as the Go, Rust and Python thin clients
+  do. Haskell's `serialise` uses a list of zero or one elements instead.
+- The decoding test suites run against seeded random generators, not QuickCheck.
+
 ## usage
 
 ```lean
@@ -71,7 +83,27 @@ make test
 ```
 
 `make test` builds every test executable and runs it from the repository root, since the
-test vectors are loaded from `testdata/` by relative path.
+test vectors are loaded from `testdata/` by relative path. The suites cover:
+
+- the RFC 7049 Appendix A vectors;
+- the regression cases from Haskell cborg's own test suite;
+- randomised round trips of terms through bytes, flat terms and chunked input;
+- canonical and non-canonical encodings of every primitive;
+- thin client messages encoded by the Katzenpost Go daemon.
+
+`make interop` also has Go decode the requests that Lean encoded and compare them with the
+daemon's own values. It needs Go and a `katzenpost` checkout next to this repository.
+`make vectors` regenerates the Go-encoded messages.
+
+Benchmarks live in a separate Lake package, so the library itself depends only on Lean
+core:
+
+```
+cd bench && lake build && .lake/build/bin/cborg-bench
+```
+
+Encoding and decoding scale linearly up to the thin client's 40 MiB frame limit, including
+a frame that arrives in 64 KiB chunks.
 
 ## license
 
