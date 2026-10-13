@@ -4,3 +4,4 @@
 # Emacs lock files / autosaves
 .#*
 \#*\#
+/.venv

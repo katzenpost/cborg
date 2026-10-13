@@ -24,3 +24,7 @@ root = "Cborg.Tests.Properties"
 [[lean_exe]]
 name = "Cborg.Tests.ThinClient"
 root = "Cborg.Tests.ThinClient"
+
+[[lean_exe]]
+name = "Cborg.Tests.Corpus"
+root = "Cborg.Tests.Corpus"

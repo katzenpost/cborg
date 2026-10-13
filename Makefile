@@ -15,7 +15,7 @@ TESTS := \
 	Cborg.Tests.Properties \
 	Cborg.Tests.ThinClient
 
-.PHONY: all build test interop vectors clean
+.PHONY: all build test interop pycheck vectors clean
 
 all: build
 
@@ -30,6 +30,15 @@ test:
 # Needs Go and a katzenpost checkout next to this repository.
 interop: test
 	cd scripts/gen-vectors && go run . verify ../../.lake/thinclient
+
+# Check Lean against Python's cbor2, which the Python thin client uses.
+# Needs a virtualenv: python3 -m venv .venv && .venv/bin/pip install 'cbor2>=5.6.5,<7'
+PYTHON ?= .venv/bin/python
+pycheck: test
+	$(LAKE) build Cborg.Tests.Corpus
+	$(PYTHON) -I scripts/cbor2_check.py corpus .lake/cbor2-corpus
+	./$(BIN)/Cborg-Tests-Corpus .lake/cbor2-corpus
+	$(PYTHON) -I scripts/cbor2_check.py check
 
 # Regenerate testdata/thinclient from the Go daemon's types.
 vectors:
