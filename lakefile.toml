@@ -1,5 +1,5 @@
 name = "cborg"
-version = "0.1.0"
+version = "0.2.0"
 description = "CBOR library for Lean, a port of the Haskell cborg library"
 keywords = ["cbor", "serialization", "codec"]
 license = "GPL-3.0-or-later"
